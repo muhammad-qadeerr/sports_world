@@ -2,7 +2,7 @@ using SportsAPI.Interfaces;
 
 namespace SportsAPI.Models;
 
-public class Athlete //: IAthelete
+public class Athlete
 {
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;

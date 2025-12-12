@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using SportsAPI.Data;
+using SportsAPI.Interfaces;
 using SportsAPI.Models;
 
 namespace SportsAPI.Controllers;
@@ -9,69 +8,152 @@ namespace SportsAPI.Controllers;
 [Route("api/[controller]")]
 public class AthleteController : ControllerBase
 {
-    private readonly SportsWorldContext context;
-    public AthleteController(SportsWorldContext context)
+    private readonly IAthleteService _service;
+    private readonly IWebHostEnvironment _env;
+
+    public AthleteController(IAthleteService service, IWebHostEnvironment env)
     {
-        this.context = context;
+        _service = service;
+        _env = env;
     }
 
     [HttpGet]
-    public async Task<ActionResult<List<Athlete>>> Get()
+    public async Task<ActionResult<IEnumerable<Athlete>>> Get()
     {
         try
         {
-            var obj = new Athlete();
-            var list = await context.Athletes.ToListAsync();
+            var list = await _service.GetAllAsync();
             return Ok(list);
         }
-        catch
+        catch (Exception)
         {
-            return StatusCode(500);
+            return StatusCode(500, "An error occurred while retrieving athletes.");
         }
     }
 
-    [HttpGet("{id}")]
+    [HttpGet("{id:int}")]
     public async Task<ActionResult<Athlete>> GetById(int id)
     {
-        var ath = await context.Athletes.FindAsync(id);
-        if (ath == null) return NotFound();
-        return Ok(ath);
+        try
+        {
+            var ath = await _service.GetByIdAsync(id);
+            if (ath == null) return NotFound();
+            return Ok(ath);
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, "An error occurred while retrieving the athlete.");
+        }
+    }
+    [HttpGet("search")]
+    public async Task<ActionResult<IEnumerable<Athlete>>> Search([FromQuery] string name)
+    {
+        try
+        {
+            var res = await _service.SearchByNameAsync(name);
+            return Ok(res);
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, "An error occurred while searching athletes.");
+        }
     }
 
-    [HttpGet("search/{name}")]
-    public async Task<ActionResult<List<Athlete>>> Search(string name)
+    [HttpGet("unpurchased")]
+    public async Task<ActionResult<IEnumerable<Athlete>>> GetUnpurchased()
     {
-        var res = await context.Athletes
-            .Where(a => a.Name.ToLower().Contains(name.ToLower()))
-            .ToListAsync();
-        return Ok(res);
+        try
+        {
+            var res = await _service.GetUnpurchasedAsync();
+            return Ok(res);
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, "An error occurred while retrieving unpurchased athletes.");
+        }
     }
 
     [HttpPost]
-    public async Task<ActionResult<Athlete>> Post(Athlete athlete)
+    [DisableRequestSizeLimit]
+    public async Task<ActionResult<Athlete>> Post([FromForm] Athlete athlete, IFormFile? image)
     {
-        if (athlete == null) return BadRequest();
-        context.Athletes.Add(athlete);
-        await context.SaveChangesAsync();
-        return Created("", athlete);
+        try
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+
+            if (image != null && image.Length >0)
+            {
+                var imagesPath = Path.Combine(_env.WebRootPath ?? "wwwroot", "images", "athletes");
+                if (!Directory.Exists(imagesPath)) Directory.CreateDirectory(imagesPath);
+
+                var fileName = $"{Guid.NewGuid()}{Path.GetExtension(image.FileName)}";
+                var filePath = Path.Combine(imagesPath, fileName);
+
+                await using var stream = System.IO.File.Create(filePath);
+                await image.CopyToAsync(stream);
+
+                athlete.Image = Path.Combine("images", "athletes", fileName).Replace("\\", "/");
+            }
+
+            var created = await _service.CreateAsync(athlete);
+            return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, "An error occurred while creating the athlete.");
+        }
     }
 
-    [HttpPut("{id}")]
-    public async Task<IActionResult> Put(int id, Athlete updated)
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> Put(int id, [FromBody] Athlete updated)
     {
-        if (id != updated.Id) return BadRequest();
-        context.Entry(updated).State = EntityState.Modified;
-        await context.SaveChangesAsync();
-        return NoContent();
+        try
+        {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
+            if (id != updated.Id) return BadRequest();
+            await _service.UpdateAsync(updated);
+            return NoContent();
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, "An error occurred while updating the athlete.");
+        }
     }
 
-    [HttpDelete("{id}")]
+    [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
-        var ath = await context.Athletes.FindAsync(id);
-        if (ath == null) return NotFound();
-        context.Athletes.Remove(ath);
-        await context.SaveChangesAsync();
-        return NoContent();
+        try
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            await _service.DeleteAsync(id);
+            return Ok();
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, "An error occurred while deleting the athlete.");
+        }
+    }
+
+    [HttpPost("{id:int}/purchase")]
+    public async Task<IActionResult> Purchase(int id)
+    {
+        try
+        {
+            var existing = await _service.GetByIdAsync(id);
+            if (existing == null) return NotFound();
+            if (existing.PurchaseStatus) return BadRequest("Athlete already purchased.");
+
+            var ok = await _service.PurchaseAsync(id);
+            if (!ok) return StatusCode(500, "Purchase failed.");
+
+            var updated = await _service.GetByIdAsync(id);
+            return Ok(updated);
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, "An error occurred while purchasing the athlete.");
+        }
     }
 }

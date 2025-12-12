@@ -2,7 +2,7 @@ using SportsAPI.Interfaces;
 
 namespace SportsAPI.Models;
 
-public class Finance : IFinance
+public class Finance
 {
     public int Id { get; set; }
     public decimal MoneyLeft { get; set; }
