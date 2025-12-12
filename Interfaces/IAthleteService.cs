@@ -5,5 +5,5 @@ namespace SportsAPI.Interfaces;
 public interface IAthleteService : ICrudService<Athlete>
 {
     Task<IEnumerable<Athlete>> GetUnpurchasedAsync();
-    Task<bool> PurchaseAsync(int id);
+    Task<(bool Success, string? Message)> PurchaseAsync(int id);
 }

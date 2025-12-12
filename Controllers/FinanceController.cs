@@ -15,7 +15,6 @@ public class FinanceController : ControllerBase
         _service = service;
     }
 
-    // Returns the single finance record (the app/company info)
     [HttpGet]
     public async Task<ActionResult<Finance>> Get()
     {

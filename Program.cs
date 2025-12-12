@@ -6,19 +6,14 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add DbContext
 builder.Services.AddDbContext<SportsWorldContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
-
-// Register services
 builder.Services.AddScoped<IAthleteService, AthleteService>();
 builder.Services.AddScoped<IFinanceService, FinanceService>();
 builder.Services.AddScoped<IVenueService, VenueService>();
 
-// Add controllers
 builder.Services.AddControllers();
 
-// Add Swagger/OpenAPI
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -30,32 +25,40 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// Add CORS policy
+// Add CORS policy allowing the frontend dev server origin (adjust or add origins as needed)
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
-        policy.AllowAnyOrigin()
+    {
+        policy.WithOrigins("http://localhost:5173")
               .AllowAnyMethod()
-              .AllowAnyHeader());
+              .AllowAnyHeader()
+              .AllowCredentials();
+    });
 });
 
 var app = builder.Build();
+var seed = Environment.GetEnvironmentVariable("SEED_DB")?.ToLower() == "true" || args.Contains("--seed");
+if (seed)
+{
+    using var scope = app.Services.CreateScope();
+    var ctx = scope.ServiceProvider.GetRequiredService<SportsWorldContext>();
+    await DbInitializer.SeedAsync(ctx);
+}
 
-// Enable Swagger only in Development (optional)
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI(c =>
     {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "SportsAPI v1");
-        c.RoutePrefix = string.Empty; // Swagger UI at root
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "SportsWorldAPI v1");
+        c.RoutePrefix = string.Empty;
     });
 }
 
-// Enable static files
 app.UseStaticFiles();
 
+// Use CORS before routing to controllers
 app.UseCors("AllowAll");
-app.MapControllers();
-
+app.MapControllers();   
 app.Run();

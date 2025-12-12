@@ -14,7 +14,7 @@ public class AthleteService : IAthleteService
     {
         try
         {
-            _context.Athletes.Add(entity);
+            await _context.Athletes.AddAsync(entity);
             await _context.SaveChangesAsync();
             return entity;
         }
@@ -83,33 +83,53 @@ public class AthleteService : IAthleteService
         catch (Exception) { throw; }
     }
 
-    public async Task<bool> PurchaseAsync(int id)
+    public async Task<(bool Success, string? Message)> PurchaseAsync(int id)
     {
         using var tx = await _context.Database.BeginTransactionAsync();
         try
         {
             var athlete = await _context.Athletes.FindAsync(id);
-            if (athlete == null) return false;
-            if (athlete.PurchaseStatus) return false; // already purchased
+            if (athlete == null)
+            {
+                await tx.RollbackAsync();
+                return (false, "Athlete not found.");
+            }
 
-            // Mark purchased
+            if (athlete.PurchaseStatus)
+            {
+                await tx.RollbackAsync();
+                return (false, "Athlete already purchased.");
+            }
+
+            var finance = await _context.Finances.FirstOrDefaultAsync();
+            if (finance == null)
+            {
+                await tx.RollbackAsync();
+                return (false, "Finance record not found.");
+            }
+
+            if (finance.MoneyLeft < athlete.Price)
+            {
+                await tx.RollbackAsync();
+                return (false, "Insufficient funds to complete purchase.");
+            }
+
             athlete.PurchaseStatus = true;
             _context.Athletes.Update(athlete);
 
-            // Update finance record if exists
-            var finance = await _context.Finances.FirstOrDefaultAsync();
-            if (finance != null)
-            {
-                finance.MoneyLeft -= athlete.Price;
-                finance.NumberOfPurchases += 1;
-                finance.MoneySpent += athlete.Price;
-                _context.Finances.Update(finance);
-            }
+            finance.MoneyLeft -= athlete.Price;
+            finance.NumberOfPurchases += 1;
+            finance.MoneySpent += athlete.Price;
+            _context.Finances.Update(finance);
 
             await _context.SaveChangesAsync();
             await tx.CommitAsync();
-            return true;
+            return (true, null);
         }
-        catch (Exception) { await tx.RollbackAsync(); throw; }
+        catch (Exception)
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
     }
 }

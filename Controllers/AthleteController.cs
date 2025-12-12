@@ -23,6 +23,7 @@ public class AthleteController : ControllerBase
         try
         {
             var list = await _service.GetAllAsync();
+            if (list == null || !list.Any()) return NoContent();
             return Ok(list);
         }
         catch (Exception)
@@ -80,23 +81,19 @@ public class AthleteController : ControllerBase
         try
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
-
-            if (image != null && image.Length >0)
+            if (image != null && image.Length > 0)
             {
                 var imagesPath = Path.Combine(_env.WebRootPath ?? "wwwroot", "images", "athletes");
                 if (!Directory.Exists(imagesPath)) Directory.CreateDirectory(imagesPath);
-
                 var fileName = $"{Guid.NewGuid()}{Path.GetExtension(image.FileName)}";
                 var filePath = Path.Combine(imagesPath, fileName);
-
                 await using var stream = System.IO.File.Create(filePath);
                 await image.CopyToAsync(stream);
-
-                athlete.Image = Path.Combine("images", "athletes", fileName).Replace("\\", "/");
+                athlete.Image = $"/images/athletes/{fileName}";
             }
 
             var created = await _service.CreateAsync(athlete);
-            return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+            return Ok(created);
         }
         catch (Exception)
         {
@@ -143,11 +140,9 @@ public class AthleteController : ControllerBase
         {
             var existing = await _service.GetByIdAsync(id);
             if (existing == null) return NotFound();
-            if (existing.PurchaseStatus) return BadRequest("Athlete already purchased.");
-
-            var ok = await _service.PurchaseAsync(id);
-            if (!ok) return StatusCode(500, "Purchase failed.");
-
+            var (success, message) = await _service.PurchaseAsync(id);
+            if (!success)
+                return BadRequest(new { Error = message ?? "Purchase failed." });
             var updated = await _service.GetByIdAsync(id);
             return Ok(updated);
         }
