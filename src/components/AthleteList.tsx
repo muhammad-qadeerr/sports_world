@@ -164,7 +164,6 @@ const AthleteList = () => {
 															e.currentTarget.style.display = 'none';
 														}}
 													/>
-													<span className="text-xs text-gray-500">Current photo</span>
 												</div>
 											)}
 											<label className="cursor-pointer">
