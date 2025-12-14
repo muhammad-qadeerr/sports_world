@@ -14,8 +14,8 @@ export interface IFinanceContext {
 	deleteAthlete: (id: number) => Promise<{ success: boolean }>;
 	editAthlete: (
 		id: number,
-		updatedAthlete: IAthlete
-	) => Promise<{ success: boolean }>;
+		formData: FormData
+	) => Promise<{ success: boolean; data?: IAthlete; error?: string }>;
 	refresh: () => Promise<void>;
 	searchAthletes: (name: string) => Promise<{ success: boolean; data: IAthlete[] | null }>;
 }
@@ -27,45 +27,6 @@ export const FinanceProvider = ({
 }: {
 	children: React.ReactNode;
 }) => {
-	// Dummy athletes for now
-	const dummyAthletes: IAthlete[] = [
-		{
-			id: 1,
-			name: "John Smith",
-			gender: "Male",
-			price: 50000,
-			purchaseStatus: false,
-		},
-		{
-			id: 2,
-			name: "Sarah Johnson",
-			gender: "Female",
-			price: 45000,
-			purchaseStatus: false,
-		},
-		{
-			id: 3,
-			name: "Mike Davis",
-			gender: "Male",
-			price: 55000,
-			purchaseStatus: true,
-		},
-		{
-			id: 4,
-			name: "Emma Wilson",
-			gender: "Female",
-			price: 48000,
-			purchaseStatus: false,
-		},
-		{
-			id: 5,
-			name: "Alex Brown",
-			gender: "Male",
-			price: 52000,
-			purchaseStatus: false,
-		},
-	];
-
 	const [athletes, setAthletes] = useState<IAthlete[]>([]);
 	const [finance, setFinance] = useState<IFinance | null>(null);
 
@@ -96,28 +57,24 @@ export const FinanceProvider = ({
 
 	const purchaseAthlete = async (id: number) => {
 		try {
-			// Call the purchase endpoint - backend handles all validation and finance updates
 			const purchaseResult = await AthleteService.purchase(id);
 			
 			if (purchaseResult.success && purchaseResult.data) {
-				// Refresh data from server to get updated state
 				await refresh();
 				return { success: true, athlete: purchaseResult.data };
 			} else {
 				return { success: false, error: purchaseResult.error };
 			}
 		} catch (error) {
-			console.error('Error in purchaseAthlete:', error);
-			return { success: false, error: 'An unexpected error occurred' };
+			console.error("Error in purchaseAthlete:", error);
+			return { success: false, error: "An unexpected error occurred" };
 		}
 	};
 
 	const requestLoan = async (amount: number) => {
 		const r = await FinanceService.requestLoan(amount);
 		if (r.success && r.data) {
-			// Update finance with the response data (backend automatically updates money left)
 			setFinance(r.data);
-			// Refresh to ensure we have the latest data
 			await refresh();
 			return { success: true };
 		}
@@ -133,15 +90,15 @@ export const FinanceProvider = ({
 		return { success: false };
 	};
 
-	const editAthlete = async (id: number, updatedAthlete: IAthlete) => {
-		const r = await AthleteService.put(id, updatedAthlete);
-		if (r.success) {
+	const editAthlete = async (id: number, formData: FormData) => {
+		const r = await AthleteService.put(id, formData);
+		if (r.success && r.data) {
 			setAthletes((prev) =>
-				prev.map((a) => (a.id === id ? updatedAthlete : a))
+				prev.map((a) => (a.id === id ? r.data! : a))
 			);
-			return { success: true };
+			return { success: true, data: r.data };
 		}
-		return { success: false };
+		return { success: false, error: r.error };
 	};
 
 	const searchAthletes = async (name: string) => {

@@ -1,4 +1,4 @@
-import AthleteFrom from "../components/AthleteFrom";
+import AthleteForm from "../components/AthleteForm";
 
 const RegisterAthelePage = () => {
 	return (
@@ -10,7 +10,7 @@ const RegisterAthelePage = () => {
 					</h1>
 				</header>
 				<div className="flex justify-center">
-					<AthleteFrom />
+					<AthleteForm />
 				</div>
 			</div>
 		</div>

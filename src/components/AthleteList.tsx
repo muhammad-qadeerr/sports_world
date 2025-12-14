@@ -1,5 +1,6 @@
-import { useContext, useState, useEffect } from "react";
+import { useContext, useState, useEffect, useRef } from "react";
 import { FinanceContext } from "../contexts/FinanceContext";
+import { getImageUrl } from "../utils/imageUtils";
 import type { IAthlete } from "../interfaces/Athlete";
 
 const AthleteList = () => {
@@ -9,6 +10,8 @@ const AthleteList = () => {
 	const [editForm, setEditForm] = useState<IAthlete | null>(null);
 	const [displayedAthletes, setDisplayedAthletes] = useState<IAthlete[]>([]);
 	const [isSearching, setIsSearching] = useState(false);
+	const editImageFileRef = useRef<HTMLInputElement | null>(null);
+	const [editSelectedFileName, setEditSelectedFileName] = useState<string>("");
 
 	if (!ctx) return null;
 
@@ -41,23 +44,58 @@ const AthleteList = () => {
 	const startEdit = (athlete: IAthlete) => {
 		setEditingId(athlete.id!);
 		setEditForm({ ...athlete });
+		setEditSelectedFileName("");
+		if (editImageFileRef.current) {
+			editImageFileRef.current.value = "";
+		}
+	};
+
+	const handleEditFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const file = e.target.files?.[0];
+		if (file) {
+			setEditSelectedFileName(file.name);
+		} else {
+			setEditSelectedFileName("");
+		}
 	};
 
 	const saveEdit = async () => {
 		if (!editForm || !editingId) return;
-		const res = await ctx.editAthlete(editingId, editForm);
+		
+		const imageFile = editImageFileRef.current?.files?.[0];
+		const formData = new FormData();
+		formData.append("Id", editForm.id?.toString() || "0");
+		formData.append("Name", editForm.name);
+		formData.append("Gender", editForm.gender);
+		formData.append("Price", editForm.price.toString());
+		formData.append("PurchaseStatus", editForm.purchaseStatus?.toString() || "false");
+		
+		// Always send current image URL so backend knows the original image
+		formData.append("Image", editForm.image || "");
+		
+		// If user selected a new file, send it as form file
+		if (imageFile) {
+			formData.append("image", imageFile);
+		}
+		
+		const res = await ctx.editAthlete(editingId, formData);
 		if (res.success) {
 			setEditingId(null);
 			setEditForm(null);
-			await ctx.refresh();
+			setEditSelectedFileName("");
+			if (editImageFileRef.current) editImageFileRef.current.value = "";
 		} else {
-			alert("Edit failed");
+			alert(res.error || "Edit athlete failed");
 		}
 	};
 
 	const cancelEdit = () => {
 		setEditingId(null);
 		setEditForm(null);
+		setEditSelectedFileName("");
+		if (editImageFileRef.current) {
+			editImageFileRef.current.value = "";
+		}
 	};
 
 	const deleteAthlete = async (id: number) => {
@@ -66,10 +104,11 @@ const AthleteList = () => {
 			if (res.success) {
 				await ctx.refresh();
 			} else {
-				alert("Delete failed");
+				alert("Delete athlete failed");
 			}
 		}
 	};
+
 
 	return (
 		<div className="bg-white p-6 rounded-lg shadow-md">
@@ -89,6 +128,9 @@ const AthleteList = () => {
 					<thead className="bg-gray-50">
 						<tr>
 							<th className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+								Profile Photo
+							</th>
+							<th className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
 								Name
 							</th>
 							<th className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -96,9 +138,6 @@ const AthleteList = () => {
 							</th>
 							<th className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
 								Price
-							</th>
-							<th className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-								Image
 							</th>
 							<th className="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
 								Purchase Status
@@ -111,6 +150,72 @@ const AthleteList = () => {
 					<tbody className="divide-y divide-gray-200">
 						{displayedAthletes.map((a) => (
 							<tr key={a.id} className="hover:bg-gray-50">
+								<td className="py-4 px-4 whitespace-nowrap">
+									{editingId === a.id ? (
+										<div className="flex flex-col gap-2">
+											{editForm?.image && (
+												<div className="flex items-center gap-2">
+													<img
+														src={getImageUrl(editForm.image)}
+														alt=""
+														className="w-12 h-12 object-cover rounded border border-gray-300"
+														onError={(e) => {
+															// Hide image when it fails to load
+															e.currentTarget.style.display = 'none';
+														}}
+													/>
+													<span className="text-xs text-gray-500">Current photo</span>
+												</div>
+											)}
+											<label className="cursor-pointer">
+												<input
+													ref={editImageFileRef}
+													type="file"
+													accept="image/*"
+													onChange={handleEditFileChange}
+													className="hidden"
+												/>
+												<div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm w-fit">
+													<svg
+														className="w-4 h-4"
+														fill="none"
+														stroke="currentColor"
+														viewBox="0 0 24 24"
+													>
+														<path
+															strokeLinecap="round"
+															strokeLinejoin="round"
+															strokeWidth={2}
+															d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+														/>
+													</svg>
+													<span className="font-medium">Choose New Profile Photo</span>
+												</div>
+											</label>
+											{editSelectedFileName && (
+												<span className="text-xs text-gray-600">
+													Selected: {editSelectedFileName}
+												</span>
+											)}
+										</div>
+									) : (
+										a.image ? (
+											<img
+												src={getImageUrl(a.image)}
+												alt=""
+												title={a.name}
+												className="w-12 h-12 object-cover rounded border border-gray-300 cursor-pointer hover:opacity-80 transition-opacity"
+												onClick={() => window.open(getImageUrl(a.image), '_blank')}
+												onError={(e) => {
+													// Hide image when it fails to load
+													e.currentTarget.style.display = 'none';
+												}}
+											/>
+										) : (
+											<span className="text-sm text-gray-400">No image</span>
+										)
+									)}
+								</td>
 								<td className="py-4 px-4 whitespace-nowrap">
 									{editingId === a.id ? (
 										<input
@@ -166,34 +271,6 @@ const AthleteList = () => {
 										<span className="text-sm text-gray-500">
 											${a.price.toFixed(2)}
 										</span>
-									)}
-								</td>
-								<td className="py-4 px-4 whitespace-nowrap">
-									{editingId === a.id ? (
-										<input
-											type="text"
-											value={editForm?.image || ""}
-											onChange={(e) =>
-												setEditForm((prev) =>
-													prev ? { ...prev, image: e.target.value } : null
-												)
-											}
-											placeholder="Image URL"
-											className="border border-gray-300 p-1 rounded w-full"
-										/>
-									) : (
-										a.image ? (
-											<a
-												href={a.image}
-												target="_blank"
-												rel="noopener noreferrer"
-												className="text-blue-600 hover:text-blue-800 underline"
-											>
-												View
-											</a>
-										) : (
-											<span className="text-sm text-gray-400">No image</span>
-										)
 									)}
 								</td>
 								<td className="py-4 px-4 whitespace-nowrap">

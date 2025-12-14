@@ -21,7 +21,7 @@ const LoanComponent = () => {
 		if (r.success) {
 			setMsg("Loan received successfully! Financial situation updated.");
 			setIsSuccess(true);
-			setAmount(0); // Clear the input
+			setAmount(0); 
 		} else {
 			setMsg(r.error || "Loan request failed");
 			setIsSuccess(false);

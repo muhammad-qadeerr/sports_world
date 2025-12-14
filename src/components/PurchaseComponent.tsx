@@ -13,11 +13,9 @@ const PurchaseComponent = () => {
 	const buy = async (id?: number, athleteName?: string) => {
 		if (!id) return;
 		
-		// Clear previous messages
 		setSuccessMessage("");
 		setErrorMessage("");
 		
-		// Show confirmation dialog
 		const confirmed = window.confirm(
 			`Are you sure you want to purchase ${athleteName || "this athlete"}?`
 		);
