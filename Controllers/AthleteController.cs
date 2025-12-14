@@ -102,14 +102,28 @@ public class AthleteController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
-    public async Task<IActionResult> Put(int id, [FromBody] Athlete updated)
+    [DisableRequestSizeLimit]
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> Put(int id, [FromForm] Athlete updated, [FromForm] IFormFile? image)
     {
         try
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
+            if (image != null && image.Length > 0)          
+            {
+                var imagesPath = Path.Combine(_env.WebRootPath ?? "wwwroot", "images", "athletes");
+                if (!Directory.Exists(imagesPath)) Directory.CreateDirectory(imagesPath);
+                var fileName = $"{Guid.NewGuid()}{Path.GetExtension(image.FileName)}";
+                var filePath = Path.Combine(imagesPath, fileName);
+                await using var stream = System.IO.File.Create(filePath);
+                await image.CopyToAsync(stream);
+                updated.Image = $"/images/athletes/{fileName}";
+            }
             if (id != updated.Id) return BadRequest();
             await _service.UpdateAsync(updated);
-            return NoContent();
+            var updatedEntity = await _service.GetByIdAsync(id);
+            if (updatedEntity == null) return NotFound();
+            return Ok(updatedEntity);
         }
         catch (Exception)
         {
